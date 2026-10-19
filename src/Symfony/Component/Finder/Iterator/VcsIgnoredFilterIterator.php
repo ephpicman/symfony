@@ -73,6 +73,7 @@ final class VcsIgnoredFilterIterator extends \FilterIterator
 
         if (!$ignored) {
             $isDir = is_dir($fileRealPath);
+            $matched = false;
 
             // the last matching rule of the deepest .gitignore file decides
             foreach (array_reverse($parentDirectories) as $parentDirectory) {
@@ -89,8 +90,28 @@ final class VcsIgnoredFilterIterator extends \FilterIterator
 
                     if (preg_match($regex, $fileRelativePath, $matches) && $matches[0] === $fileRelativePath) {
                         $ignored = !$isNegated;
+                        $matched = true;
 
                         break 2;
+                    }
+                }
+            }
+
+            // .gitignore files take precedence over the repository's exclude file
+            if (!$matched && null !== $excludeFile = $this->getGitInfoExcludePath()) {
+                if (null !== $rules = $this->readGitignoreFile($excludeFile)) {
+                    $fileRelativePath = substr($fileRealPath, \strlen($this->baseDir) + 1);
+
+                    foreach ($rules as [$regex, $isNegated, $isDirOnly]) {
+                        if ($isDirOnly && !$isDir) {
+                            continue;
+                        }
+
+                        if (preg_match($regex, $fileRelativePath, $matches) && $matches[0] === $fileRelativePath) {
+                            $ignored = !$isNegated;
+
+                            break;
+                        }
                     }
                 }
             }
@@ -138,6 +159,50 @@ final class VcsIgnoredFilterIterator extends \FilterIterator
         return array_reverse(
             $this->parentDirectoriesUpTo($fileRealPath, $this->baseDir)
         );
+    }
+
+    private function getGitInfoExcludePath(): ?string
+    {
+        $gitPath = "{$this->baseDir}/.git";
+
+        if (is_dir($gitPath)) {
+            return "{$gitPath}/info/exclude";
+        }
+
+        if (!is_file($gitPath) || !is_readable($gitPath)) {
+            return null;
+        }
+
+        $gitFile = file_get_contents($gitPath);
+
+        if (false === $gitFile || !preg_match('~^gitdir:\\s*(.+)\\s*$~i', trim($gitFile), $matches)) {
+            return null;
+        }
+
+        $gitDir = $matches[1];
+
+        if (!str_starts_with($gitDir, '/') && !preg_match('~^[A-Za-z]:[\\\\/]~', $gitDir)) {
+            $gitDir = "{$this->baseDir}/{$gitDir}";
+        }
+
+        $gitDir = realpath($gitDir) ?: $gitDir;
+        $commonDirPath = "{$gitDir}/commondir";
+
+        if (is_file($commonDirPath) && is_readable($commonDirPath)) {
+            $commonDir = file_get_contents($commonDirPath);
+
+            if (false !== $commonDir && '' !== trim($commonDir)) {
+                $commonDir = trim($commonDir);
+
+                if (!str_starts_with($commonDir, '/') && !preg_match('~^[A-Za-z]:[\\\\/]~', $commonDir)) {
+                    $commonDir = "{$gitDir}/{$commonDir}";
+                }
+
+                $gitDir = realpath($commonDir) ?: $commonDir;
+            }
+        }
+
+        return "{$gitDir}/info/exclude";
     }
 
     /**
