@@ -548,6 +548,34 @@ class UrlGeneratorTest extends TestCase
         ]));
     }
 
+    #[DataProvider('unicodePathParametersProvider')]
+    public function testGenerateAndMatchRoundTripForUnicodeAndReservedPathCharacters(string $value)
+    {
+        $routes = $this->getRoutes('test', new Route('/item/{value}', [], ['value' => '.+'], ['utf8' => true]));
+        $generator = $this->getGenerator($routes);
+
+        $url = $generator->generate('test', ['value' => $value]);
+        $this->assertStringStartsWith('/app.php/item/', $url);
+
+        $matcher = new \\Symfony\\Component\\Routing\\Matcher\\UrlMatcher($routes, new RequestContext());
+        $this->assertSame(
+            ['_route' => 'test', 'value' => $value],
+            $matcher->match(substr($url, strlen('/app.php')))
+        );
+    }
+
+    public static function unicodePathParametersProvider(): iterable
+    {
+        yield 'Persian text with zero-width non-joiner' => ["می\u{200C}روم"];
+        yield 'decomposed Latin character' => ["e\u{0301}"];
+        yield 'combining marks' => ["ن\u{0650}\u{0651}"];
+        yield 'supplementary-plane character' => ["\u{1F680}"];
+        yield 'emoji sequence with variation selector' => ["\u{2764}\u{FE0F}"];
+        yield 'percent-encoded-looking text' => ['%2F%23'];
+        yield 'reserved delimiters inside a path parameter' => ['a?b#c;d@e:f'];
+        yield 'Unicode mixed with plus and percent' => ['فارسی+100%'];
+    }
+
     public function testEncodingOfRelativePathSegments()
     {
         $routes = $this->getRoutes('test', new Route('/dir/../dir/..'));
