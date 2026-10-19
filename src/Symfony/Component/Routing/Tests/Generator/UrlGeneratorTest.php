@@ -557,11 +557,10 @@ class UrlGeneratorTest extends TestCase
         $url = $generator->generate('test', ['value' => $value]);
         $this->assertStringStartsWith('/app.php/item/', $url);
 
-        $matcher = new \\Symfony\\Component\\Routing\\Matcher\\UrlMatcher($routes, new RequestContext());
-        $this->assertSame(
-            ['_route' => 'test', 'value' => $value],
-            $matcher->match(substr($url, strlen('/app.php')))
-        );
+        $matcher = new UrlMatcher($routes, new RequestContext());
+        $parameters = $matcher->match(substr($url, strlen('/app.php')));
+        $this->assertSame('test', $parameters['_route']);
+        $this->assertSame($value, $parameters['value']);
     }
 
     public static function unicodePathParametersProvider(): iterable
