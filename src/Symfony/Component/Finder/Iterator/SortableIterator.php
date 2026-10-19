@@ -35,6 +35,7 @@ class SortableIterator implements \IteratorAggregate
     /** @var \Traversable<string, \SplFileInfo> */
     private \Traversable $iterator;
     private \Closure|int $sort;
+    private array $realPathsCache = [];
 
     /**
      * @param \Traversable<string, \SplFileInfo> $iterator
@@ -48,22 +49,22 @@ class SortableIterator implements \IteratorAggregate
         $order = $reverseOrder ? -1 : 1;
 
         if (self::SORT_BY_NAME === $sort) {
-            $this->sort = static fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strcmp($a->getRealPath() ?: $a->getPathname(), $b->getRealPath() ?: $b->getPathname());
+            $this->sort = fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strcmp($this->getRealPath($a), $this->getRealPath($b));
         } elseif (self::SORT_BY_NAME_NATURAL === $sort) {
-            $this->sort = static fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strnatcmp($a->getRealPath() ?: $a->getPathname(), $b->getRealPath() ?: $b->getPathname());
+            $this->sort = fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strnatcmp($this->getRealPath($a), $this->getRealPath($b));
         } elseif (self::SORT_BY_NAME_CASE_INSENSITIVE === $sort) {
-            $this->sort = static fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strcasecmp($a->getRealPath() ?: $a->getPathname(), $b->getRealPath() ?: $b->getPathname());
+            $this->sort = fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strcasecmp($this->getRealPath($a), $this->getRealPath($b));
         } elseif (self::SORT_BY_NAME_NATURAL_CASE_INSENSITIVE === $sort) {
-            $this->sort = static fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strnatcasecmp($a->getRealPath() ?: $a->getPathname(), $b->getRealPath() ?: $b->getPathname());
+            $this->sort = fn (\SplFileInfo $a, \SplFileInfo $b) => $order * strnatcasecmp($this->getRealPath($a), $this->getRealPath($b));
         } elseif (self::SORT_BY_TYPE === $sort) {
-            $this->sort = static function (\SplFileInfo $a, \SplFileInfo $b) use ($order) {
+            $this->sort = function (\SplFileInfo $a, \SplFileInfo $b) use ($order) {
                 if ($a->isDir() && $b->isFile()) {
                     return -$order;
                 } elseif ($a->isFile() && $b->isDir()) {
                     return $order;
                 }
 
-                return $order * strcmp($a->getRealPath() ?: $a->getPathname(), $b->getRealPath() ?: $b->getPathname());
+                return $order * strcmp($this->getRealPath($a), $this->getRealPath($b));
             };
         } elseif (self::SORT_BY_ACCESSED_TIME === $sort) {
             $this->sort = static fn (\SplFileInfo $a, \SplFileInfo $b) => $order * ($a->getATime() - $b->getATime());
@@ -86,6 +87,8 @@ class SortableIterator implements \IteratorAggregate
 
     public function getIterator(): \Traversable
     {
+        $this->realPathsCache = [];
+
         if (1 === $this->sort) {
             yield from $this->iterator;
 
@@ -111,5 +114,10 @@ class SortableIterator implements \IteratorAggregate
         foreach ($values as $i => $v) {
             yield $keys[$i] => $v;
         }
+    }
+
+    private function getRealPath(\SplFileInfo $file): string
+    {
+        return $this->realPathsCache[spl_object_id($file)] ??= $file->getRealPath() ?: $file->getPathname();
     }
 }
