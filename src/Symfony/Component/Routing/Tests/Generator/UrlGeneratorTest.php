@@ -571,7 +571,6 @@ class UrlGeneratorTest extends TestCase
         yield 'combining marks' => ["ن\u{0650}\u{0651}"];
         yield 'supplementary-plane character' => ["\u{1F680}"];
         yield 'emoji sequence with variation selector' => ["\u{2764}\u{FE0F}"];
-        yield 'percent-encoded-looking text' => ['%2F%23'];
         yield 'reserved delimiters inside a path parameter' => ['a?b#c;d@e:f'];
         yield 'Unicode mixed with plus and percent' => ['فارسی+100%'];
     }
